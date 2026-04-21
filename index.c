@@ -23,7 +23,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
-
+#include <errno.h>
+	
 static int cmp_index_entries(const void *a, const void *b) {
     const IndexEntry *ea = (const IndexEntry *)a;
     const IndexEntry *eb = (const IndexEntry *)b;
@@ -162,12 +163,12 @@ int index_load(Index *index) {
         IndexEntry e;
         char hex[HASH_HEX_SIZE + 1];
 
-        int rc = fscanf(fp, "%o %64s %ld %zu %255s\n",
-                        &e.mode,
-                        hex,
-                        &e.mtime_sec,
-                        &e.size,
-                        e.path);
+        int rc = fscanf(fp, "%o %64s %ld %u %255s\n",
+                &e.mode,
+                hex,
+                &e.mtime_sec,
+                &e.size,
+                e.path);
 
         if (rc == EOF) {
             break;
@@ -220,12 +221,13 @@ int index_save(const Index *index) {
         char hex[HASH_HEX_SIZE + 1];
         hash_to_hex(&tmp.entries[i].hash, hex);
 
-        if (fprintf(fp, "%06o %s %ld %zu %s\n",
-                    tmp.entries[i].mode,
-                    hex,
-                    tmp.entries[i].mtime_sec,
-                    tmp.entries[i].size,
-                    tmp.entries[i].path) < 0) {
+        if (fprintf(fp, "%06o %s %ld %u %s\n",
+            tmp.entries[i].mode,
+            hex,
+            tmp.entries[i].mtime_sec,
+            tmp.entries[i].size,
+            tmp.entries[i].path) < 0) {
+
             fclose(fp);
             unlink(".pes/index.tmp");
             return -1;
