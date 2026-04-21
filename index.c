@@ -267,8 +267,69 @@ int index_save(const Index *index) {
 //
 // Returns 0 on success, -1 on error.
 int index_add(Index *index, const char *path) {
-    // TODO: Implement file staging
-    // (See Lab Appendix for logical steps)
-    (void)index; (void)path;
-    return -1;
+    if (!index || !path) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return -1;
+    }
+
+    if (!S_ISREG(st.st_mode)) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    FILE *fp = fopen(path, "rb");
+    if (!fp) {
+  	return -1;
+    }
+
+    void *buf = NULL;
+    if (st.st_size > 0) {
+    buf = malloc((size_t)st.st_size);
+    if (!buf) {
+        fclose(fp);
+        return -1;
+    }
+
+    if (fread(buf, 1, (size_t)st.st_size, fp) != (size_t)st.st_size) {
+        free(buf);
+        fclose(fp);
+        return -1;
+    }
+    }
+
+    fclose(fp);
+
+    ObjectID oid;
+    if (object_write(OBJ_BLOB, buf, (size_t)st.st_size, &oid) != 0) {
+        free(buf);
+        return -1;
+    }
+
+    free(buf);
+
+    IndexEntry *existing = index_find(index, path);
+    IndexEntry e;
+
+    e.mode = (st.st_mode & S_IXUSR) ? 100755 : 100644;
+    e.hash = oid;
+    e.mtime_sec = st.st_mtime;
+    e.size = (size_t)st.st_size;
+    snprintf(e.path, sizeof(e.path), "%s", path);
+
+    if (existing) {
+        *existing = e;
+    } else {
+        if (index->count >= MAX_INDEX_ENTRIES) {
+            errno = ENOSPC;
+            return -1;
+        }
+        index->entries[index->count++] = e;
+    }
+
+    return index_save(index);
 }
